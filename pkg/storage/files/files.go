@@ -3,7 +3,6 @@ package files
 import (
 	"encoding/gob"
 	"errors"
-	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -12,8 +11,8 @@ import (
 	"vk_chat_bot/pkg/storage"
 )
 
-const (
-	defaultPerm = 0774
+var (
+	ErrNoMovies = errors.New("no urls")
 )
 
 type Storage struct {
@@ -24,21 +23,22 @@ func New(basePath string) Storage {
 	return Storage{basePath: basePath}
 }
 
-func (s Storage) Save(page *storage.Movie) error {
-	fPath := filepath.Join(s.basePath, strconv.Itoa(page.UserID))
-
-	if err := os.MkdirAll(fPath, defaultPerm); err != nil {
-		fmt.Println(err)
-		return err
-	}
-
-	fName, err := fileName(page)
+func (s Storage) SetIntent(userID, intent int) error {
+	userData, err := s.GetUserData(userID)
 	if err != nil {
-		fmt.Println(err)
-		return err
-	}
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 
-	fPath = filepath.Join(fPath, fName)
+		userData.UserID = userID
+	}
+	userData.UserIntent = intent
+
+	return s.Save(userData)
+}
+
+func (s Storage) Save(page *storage.UserData) error {
+	fPath := filepath.Join(s.basePath, strconv.Itoa(page.UserID))
 
 	file, err := os.Create(fPath)
 	if err != nil {
@@ -49,86 +49,76 @@ func (s Storage) Save(page *storage.Movie) error {
 		return err
 	}
 
-	err = file.Close()
-	if err != nil {
-		return err
-	}
+	defer file.Close()
 
 	return nil
 }
 
-func (s Storage) PickRandom(userId int) (page *storage.Movie, err error) {
-	path := filepath.Join(s.basePath, strconv.Itoa(userId))
-
-	files, err := os.ReadDir(path)
+func (s Storage) PickRandom(userId int) (page string, err error) {
+	userData, err := s.GetUserData(userId)
 	if err != nil {
-		return nil, err
+		return "", err
 	}
-	if len(files) == 0 {
-		return nil, storage.ErrNoSavedPages
+	if len(userData.Urls) == 0 {
+		return "", ErrNoMovies
 	}
 
 	rand.Seed(time.Now().UnixNano())
-	n := rand.Intn(len(files))
+	n := rand.Intn(len(userData.Urls))
 
-	file := files[n]
-
-	return s.decodePage(filepath.Join(path, file.Name()))
+	return userData.Urls[n], nil
 }
 
-func (s Storage) IsExist(p *storage.Movie) (bool, error) {
-	fileName, err := fileName(p)
+func (s Storage) IsExist(d *storage.UserData, url string) bool {
+	for _, v := range d.Urls {
+		if v == url {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s Storage) GetUserData(userID int) (*storage.UserData, error) {
+	page, err := s.decodePage(filepath.Join(s.basePath, strconv.Itoa(userID)))
 	if err != nil {
-		return false, err
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+
+		page = &storage.UserData{
+			UserID: userID,
+		}
+		err = s.Save(page)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	path := filepath.Join(s.basePath, strconv.Itoa(p.UserID), fileName)
-
-	switch _, err = os.Stat(path); {
-	case errors.Is(err, os.ErrNotExist):
-		return false, nil
-	case err != nil:
-		return false, err
-	}
-
-	return true, nil
+	return page, nil
 }
 
-func (s Storage) Remove(p *storage.Movie) error {
-	fileName, err := fileName(p)
-	if err != nil {
-		return err
-	}
+func (s Storage) DeleteAll(userID int) error {
+	fPath := filepath.Join(s.basePath, strconv.Itoa(userID))
 
-	path := filepath.Join(s.basePath, strconv.Itoa(p.UserID), fileName)
-
-	if err = os.Remove(path); err != nil {
-		return err
-	}
-
-	return nil
+	return os.Remove(fPath)
 }
 
-func (s Storage) decodePage(filePath string) (*storage.Movie, error) {
+func (s Storage) decodePage(filePath string) (*storage.UserData, error) {
 	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
 
-	var p storage.Movie
+	var p storage.UserData
 
 	if err := gob.NewDecoder(f).Decode(&p); err != nil {
 		return nil, err
 	}
 
-	err = f.Close()
 	if err != nil {
 		return nil, err
 	}
 	return &p, nil
-
-}
-
-func fileName(p *storage.Movie) (string, error) {
-	return p.Hash()
 }

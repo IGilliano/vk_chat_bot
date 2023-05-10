@@ -25,22 +25,15 @@ type Object struct {
 }
 
 type Message struct {
-	Date                  int          `json:"date"`
-	FromId                int          `json:"from_id"`
-	ID                    int          `json:"id"`
-	Out                   int          `json:"out"`
-	Attachments           []Attachment `json:"attachments"`
-	ConversationMessageId int          `json:"conversation_message_id"`
-	Keyboard              string       `json:"keyboard"`
-	//"fwd_messages":[]
-	//"important":false
-	//"is_hidden":false
-	PeerId   int    `json:"peer_id"`
-	RandomId int    `json:"random_id"`
-	Text     string `json:"text"`
-}
-
-type Attachment struct {
+	Date                  int    `json:"date"`
+	FromId                int    `json:"from_id"`
+	ID                    int    `json:"id"`
+	Out                   int    `json:"out"`
+	ConversationMessageId int    `json:"conversation_message_id"`
+	Keyboard              string `json:"keyboard"`
+	PeerId                int    `json:"peer_id"`
+	RandomId              int    `json:"random_id"`
+	Text                  string `json:"text"`
 }
 
 type MessageConfig struct {

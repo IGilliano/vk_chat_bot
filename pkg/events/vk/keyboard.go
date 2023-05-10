@@ -5,6 +5,18 @@ import (
 	"fmt"
 )
 
+type MenuType int
+
+const (
+	MenuTypeEmpty = iota
+	MenuTypeMain
+	MenuTypeRecommendation
+	MenuTypeSos
+	MenuTypeCollection
+	MenuTypeCollectionAdd
+	MenuTypeStart
+)
+
 type KeyBoard struct {
 	OneTime bool       `json:"one_time"`
 	Buttons [][]Button `json:"buttons"`
@@ -23,27 +35,27 @@ type Action struct {
 
 func makeButtons(num int) string {
 	switch num {
-	case 0:
+	case MenuTypeStart:
 		buttons := [][]Button{
 			{Button{Action: Action{
 				Type:  "text",
 				Label: "Старт",
 			}, Color: "positive"},
 			},
+			{Button{Action: Action{
+				Type:  "text",
+				Label: "Очистить данные",
+			}, Color: "negative"},
+			},
 		}
 		return makeKeyboard(buttons)
 
-	case 1:
+	case MenuTypeMain:
 		buttons := [][]Button{
 			{Button{Action: Action{
 				Type:  "text",
-				Label: "Посоветуй фильм!",
+				Label: "Посоветуй фильм",
 			}, Color: "positive"},
-			},
-			{Button{Action: Action{
-				Type:  "text",
-				Label: "Оценить фильм",
-			}, Color: "primary"},
 			},
 			{Button{Action: Action{
 				Type:  "text",
@@ -52,12 +64,17 @@ func makeButtons(num int) string {
 			},
 			{Button{Action: Action{
 				Type:  "text",
-				Label: "SOS!",
+				Label: "Помощь",
 			}, Color: "primary"},
+			},
+			{Button{Action: Action{
+				Type:  "text",
+				Label: "Стоп",
+			}, Color: "negative"},
 			},
 		}
 		return makeKeyboard(buttons)
-	case 2:
+	case MenuTypeRecommendation:
 		buttons := [][]Button{
 			{Button{Action: Action{
 				Type:  "text",
@@ -71,7 +88,7 @@ func makeButtons(num int) string {
 			},
 		}
 		return makeKeyboard(buttons)
-	case 3:
+	case MenuTypeSos:
 		buttons := [][]Button{
 			{Button{Action: Action{
 				Type:  "text",
@@ -85,7 +102,7 @@ func makeButtons(num int) string {
 			},
 		}
 		return makeKeyboard(buttons)
-	case 4:
+	case MenuTypeCollection:
 		buttons := [][]Button{
 			{Button{Action: Action{
 				Type:  "text",
@@ -96,6 +113,20 @@ func makeButtons(num int) string {
 				Type:  "text",
 				Label: "Удалить фильм",
 			}, Color: "negative"},
+			},
+			{Button{Action: Action{
+				Type:  "text",
+				Label: "В главное меню",
+			}, Color: "primary"},
+			},
+		}
+		return makeKeyboard(buttons)
+	case MenuTypeCollectionAdd:
+		buttons := [][]Button{
+			{Button{Action: Action{
+				Type:  "text",
+				Label: "Добавить фильм",
+			}, Color: "positive"},
 			},
 			{Button{Action: Action{
 				Type:  "text",

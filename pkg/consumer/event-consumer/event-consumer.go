@@ -34,7 +34,7 @@ func (c Consumer) Start() error {
 			continue
 		}
 
-		if err := c.handleEvents(events); err != nil {
+		if err = c.handleEvents(events); err != nil {
 			log.Print(err)
 			continue
 		}
@@ -44,8 +44,6 @@ func (c Consumer) Start() error {
 func (c *Consumer) handleEvents(events []events.Event) error {
 	for _, event := range events {
 		log.Printf("Got new event: %s", event.Text)
-
-		//wg := sync.WaitGroup{}
 
 		if err := c.processor.Process(event); err != nil {
 			log.Printf("Cant handle event: %s", err.Error())

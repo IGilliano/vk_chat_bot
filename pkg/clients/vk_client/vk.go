@@ -39,8 +39,6 @@ func (c *Client) SendMessage(userId int, message string, keyboard string) error 
 	rand.Seed(time.Now().UnixNano())
 	n := rand.Intn(10000)
 
-	fmt.Printf("\n%s", keyboard)
-
 	q := url.Values{}
 	q.Add("v", version)
 	q.Add("user_id", strconv.Itoa(userId))
@@ -50,7 +48,7 @@ func (c *Client) SendMessage(userId int, message string, keyboard string) error 
 
 	_, err := c.doRequest(sendMessageMethod, q)
 	if err != nil {
-		fmt.Println(err)
+		return err
 	}
 
 	return nil
@@ -98,8 +96,6 @@ func (c *Client) Updates(server, key, ts string) []Update {
 		fmt.Printf("Cant read responce:%s", err.Error())
 	}
 
-	fmt.Println(string(body))
-
 	var lPR LongPoolResponse
 
 	if err = json.Unmarshal(body, &lPR); err != nil {
@@ -128,8 +124,6 @@ func (c *Client) doRequest(method string, query url.Values) (data []byte, err er
 
 	req.URL.RawQuery = query.Encode()
 
-	fmt.Println(req)
-
 	resp, err := c.client.Do(req)
 	if err != nil {
 		return nil, err
@@ -140,8 +134,6 @@ func (c *Client) doRequest(method string, query url.Values) (data []byte, err er
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Println(string(body))
 
 	return body, nil
 }

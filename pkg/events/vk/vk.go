@@ -19,7 +19,7 @@ type Meta struct {
 
 var (
 	ErrUnknownEventType = errors.New("unknown event type")
-	ErrUnknownMeta      = errors.New("Unknown meta type")
+	ErrUnknownMeta      = errors.New("unknown meta type")
 )
 
 func NewProcessor(client *vk_client.Client, storage storage.Storage) *Processor {

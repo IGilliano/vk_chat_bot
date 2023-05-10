@@ -2,10 +2,13 @@ package vk
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net/url"
+	"os"
 	"strings"
 	"vk_chat_bot/pkg/storage"
+	"vk_chat_bot/pkg/storage/files"
 )
 
 func (p *Processor) doCmd(text string, userId int) error {
@@ -13,121 +16,182 @@ func (p *Processor) doCmd(text string, userId int) error {
 
 	log.Printf("Got new message %s from user:%d", text, userId)
 
-	//добавить/удалить?
-	if isUrl(text) {
-		return p.saveMovie(userId, text)
+	if u, err := url.Parse(text); err == nil && u.Host != "" {
+		fmt.Println(u.Hostname())
+		if u.Hostname() != "kinopoisk.ru" && u.Hostname() != "www.kinopoisk.ru" {
+			return p.vk.SendMessage(userId, msgBotIsStupid, makeButtons(MenuTypeCollection))
+		}
+
+		return p.processMovie(userId, text)
 	}
+
+	var err error
 
 	switch text {
 	case "Привет", "Старт":
-		return p.hello(userId)
-	case "Посоветуй фильм!", "Хочу другой":
-		return p.sendRandom(userId)
+		err = p.hello(userId)
+	case "Посоветуй фильм", "Хочу другой":
+		err = p.sendRandom(userId)
 	case "Моя коллекция":
-		return p.vk.SendMessage(userId, msgCollection, makeButtons(4))
+		err = p.myCollection(userId)
 	case "Добавить фильм":
-		return p.vk.SendMessage(userId, msgSaveMovie, makeButtons(4))
+		return p.setIntent(userId, 1)
 	case "Удалить фильм":
-		return p.vk.SendMessage(userId, msgSaveMovie, makeButtons(4))
-	case "SOS!":
-		return p.help(userId)
+		return p.setIntent(userId, 2)
+	case "Помощь":
+		err = p.help(userId)
 	case "Как добавлять новые фильмы?":
-		return p.vk.SendMessage(userId, msgHelp1, makeButtons(1))
+		err = p.vk.SendMessage(userId, msgHelp1, makeButtons(MenuTypeMain))
 	case "Спасибо!":
-		return p.vk.SendMessage(userId, msgTY, makeButtons(1))
+		err = p.vk.SendMessage(userId, msgTY, makeButtons(MenuTypeMain))
 	case "В главное меню":
-		return p.vk.SendMessage(userId, msgMainMenu, makeButtons(1))
+		err = p.vk.SendMessage(userId, msgMainMenu, makeButtons(MenuTypeMain))
 	case "Стоп":
-		return p.vk.SendMessage(userId, msgStop, makeButtons(0))
+		err = p.vk.SendMessage(userId, msgStop, makeButtons(MenuTypeStart))
+	case "Очистить данные":
+		err = p.deleteAll(userId)
 	default:
-		return p.vk.SendMessage(userId, msgUnknownCommand, makeButtons(1))
+		err = p.vk.SendMessage(userId, msgUnknownCommand, makeButtons(MenuTypeMain))
 	}
-}
-
-func (p *Processor) saveMovie(userId int, movieUrl string) error {
-
-	page := &storage.Movie{
-		Url:    movieUrl,
-		UserID: userId,
-	}
-
-	isExist, err := p.storage.IsExist(page)
 	if err != nil {
 		return err
 	}
 
-	if isExist {
-		return p.vk.SendMessage(userId, msgAlreadyExists, makeButtons(1))
-	}
+	return p.setIntent(userId, 0)
+}
 
-	if err := p.storage.Save(page); err != nil {
+func (p *Processor) myCollection(userId int) error {
+	userData, err := p.storage.GetUserData(userId)
+	if err != nil {
 		return err
 	}
 
-	if err = p.vk.SendMessage(userId, msgSaved, makeButtons(1)); err != nil {
+	if len(userData.Urls) == 0 {
+		return p.vk.SendMessage(userId, msgNoSavedMovies, makeButtons(MenuTypeCollectionAdd))
+	}
+	var subResult string
+	for i, v := range userData.Urls {
+		subResult += fmt.Sprintf(msgCollectionPartFmt, i+1, v)
+	}
+	result := fmt.Sprintf(msgCollectionMainFmt, subResult)
+
+	err = p.storage.Save(userData)
+	if err != nil {
 		return err
 	}
 
-	return nil
+	return p.vk.SendMessage(userId, result, makeButtons(MenuTypeCollection))
+}
+
+func (p *Processor) setIntent(userId, intent int) error {
+	if err := p.storage.SetIntent(userId, intent); err != nil {
+		return err
+	}
+
+	var msg string
+	switch intent {
+	case 1:
+		msg = msgSaveMovie
+	case 2:
+		msg = msgDeleteMovie
+	default:
+		return nil
+	}
+	return p.vk.SendMessage(userId, msg, makeButtons(MenuTypeEmpty))
+}
+
+func (p *Processor) processMovie(userId int, movieUrl string) error {
+	userData, err := p.storage.GetUserData(userId)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
+	}
+
+	switch userData.UserIntent {
+	case 0, 1:
+		return p.addMovie(userData, movieUrl)
+	case 2:
+		return p.deleteMovie(userData, movieUrl)
+	default:
+		return errors.New("something unexpected happened")
+	}
+}
+
+func (p *Processor) addMovie(userData *storage.UserData, url string) error {
+	for _, v := range userData.Urls {
+		if v == url {
+			return p.vk.SendMessage(userData.UserID, msgAlreadyExists, makeButtons(MenuTypeMain))
+		}
+	}
+	userData.Urls = append(userData.Urls, url)
+	userData.UserIntent = 0
+
+	if err := p.storage.Save(userData); err != nil {
+		return err
+	}
+
+	return p.vk.SendMessage(userData.UserID, msgSaved, makeButtons(MenuTypeMain))
+}
+
+func (p *Processor) deleteMovie(userData *storage.UserData, movieUrl string) error {
+	if !p.storage.IsExist(userData, movieUrl) {
+		return p.vk.SendMessage(userData.UserID, msgAlreadyNotExists, makeButtons(MenuTypeMain))
+	}
+
+	newUrls, err := deleteUrl(userData.Urls, movieUrl)
+	if err != nil {
+		return err
+	}
+
+	userData.UserIntent = 0
+	userData.Urls = newUrls
+
+	if err = p.storage.Save(userData); err != nil {
+		return err
+	}
+
+	return p.vk.SendMessage(userData.UserID, msgDelete, makeButtons(MenuTypeMain))
 }
 
 func (p *Processor) sendRandom(userId int) error {
 	page, err := p.storage.PickRandom(userId)
-	if err != nil && !errors.Is(err, storage.ErrNoSavedPages) {
-		return err
+	if err != nil {
+		if !errors.Is(err, files.ErrNoMovies) {
+			return err
+		}
+
+		return p.vk.SendMessage(userId, msgNoSavedMovies, makeButtons(MenuTypeCollectionAdd))
 	}
 
-	keyboard := makeButtons(2)
-
-	if errors.Is(err, storage.ErrNoSavedPages) {
-		return p.vk.SendMessage(userId, msgNoSavedMovies, makeButtons(1))
-	}
-
-	if err = p.vk.SendMessage(userId, page.Url, keyboard); err != nil {
-		return err
-	}
-
-	return nil
+	return p.vk.SendMessage(userId, page, makeButtons(MenuTypeRecommendation))
 }
 
-func (p *Processor) deleteMovie(userId int, movieUrl string) error {
-	page := &storage.Movie{
-		Url:    movieUrl,
-		UserID: userId,
+func deleteUrl(urls []string, toDelete string) ([]string, error) {
+	newUrls := make([]string, 0, len(urls)-1)
+	for _, v := range urls {
+		if v == toDelete {
+			continue
+		}
+		newUrls = append(newUrls, v)
 	}
 
-	isExist, err := p.storage.IsExist(page)
-	if err != nil {
+	return newUrls, nil
+}
+
+func (p *Processor) deleteAll(userId int) error {
+	if err := p.storage.DeleteAll(userId); err != nil {
 		return err
 	}
 
-	if isExist {
-		return p.vk.SendMessage(userId, msgAlreadyNotExists, makeButtons(4))
-	}
-
-	err = p.storage.Remove(page)
-	if err != nil {
-		return err
-	}
-
-	if err = p.vk.SendMessage(userId, msgDelete, makeButtons(4)); err != nil {
-		return err
-	}
-
-	return nil
+	return p.vk.SendMessage(userId, msgDeletedAll, makeButtons(MenuTypeEmpty))
 }
 
 func (p *Processor) help(userId int) error {
-	return p.vk.SendMessage(userId, msgHelp, makeButtons(3))
+	return p.vk.SendMessage(userId, msgHelp, makeButtons(MenuTypeSos))
 
 }
 
 func (p *Processor) hello(userId int) error {
-	return p.vk.SendMessage(userId, msgHello, makeButtons(1))
-}
-
-func isUrl(text string) bool {
-	u, err := url.Parse(text)
-
-	return err == nil && u.Host != ""
+	return p.vk.SendMessage(userId, msgHello, makeButtons(MenuTypeMain))
 }
