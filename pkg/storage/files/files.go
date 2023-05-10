@@ -24,6 +24,7 @@ func New(basePath string) Storage {
 }
 
 func (s Storage) SetIntent(userID, intent int) error {
+
 	userData, err := s.GetUserData(userID)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
@@ -80,7 +81,9 @@ func (s Storage) IsExist(d *storage.UserData, url string) bool {
 }
 
 func (s Storage) GetUserData(userID int) (*storage.UserData, error) {
-	page, err := s.decodePage(filepath.Join(s.basePath, strconv.Itoa(userID)))
+	fPath := filepath.Join(s.basePath, strconv.Itoa(userID))
+
+	page, err := s.decodePage(fPath)
 	if err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return nil, err
@@ -105,6 +108,7 @@ func (s Storage) DeleteAll(userID int) error {
 }
 
 func (s Storage) decodePage(filePath string) (*storage.UserData, error) {
+
 	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, err

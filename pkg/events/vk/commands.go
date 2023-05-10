@@ -38,7 +38,7 @@ func (p *Processor) doCmd(text string, userId int) error {
 		return p.setIntent(userId, 1)
 	case "Удалить фильм":
 		return p.setIntent(userId, 2)
-	case "Помощь":
+	case "Помощь", "Начать":
 		err = p.help(userId)
 	case "Как добавлять новые фильмы?":
 		err = p.vk.SendMessage(userId, msgHelp1, makeButtons(MenuTypeMain))
