@@ -12,7 +12,6 @@ const (
 	host      = "api.vk.com"
 	basePath  = "storage"
 	batchSize = 100
-	token     = "vk1.a.LVvYNHuPbKLve39PzdK2ROjvxdftBCQgeQ5KEjd2Sh9lFdA_643XNTfoDLKcQGrDFdAs9L-E7AsE-Jpi85tVAjGLwDx0xdaiSCOst5K9eQ5rUFVtrRhbJESnJvmnYrumwCHyfLgdRTRnVs3uaO9zUTHYJg6wPuQyEPywT92I6EUJAM8vYnyG7KsBJbAZVAkdVa1KcGLDkXjKtV4w5b7voA"
 )
 
 func main() {
